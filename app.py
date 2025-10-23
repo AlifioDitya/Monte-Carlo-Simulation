@@ -285,7 +285,7 @@ def fig_projection_band(res, target_fv):
     )
 
     fig.update_layout(
-        title="Projection Band (Monthly)",
+        title="Projection Band with Monthly Contributions",
         xaxis_title="Month", yaxis_title="Wealth (IDR)",
         hovermode="x unified", margin=dict(l=10, r=10, t=40, b=10)
     )
@@ -332,7 +332,7 @@ def fig_simulated_paths(res, target_fv):
     )
 
     fig.update_layout(
-        title=f"Simulated Wealth Paths (sample {W.shape[1]})",
+        title=f"Simulated Wealth Paths with Sample Size of {W.shape[1]}",
         xaxis_title="Month", yaxis_title="Wealth (IDR)",
         hovermode="x", margin=dict(l=10, r=10, t=40, b=10)
     )
@@ -379,7 +379,7 @@ def fig_end_wealth_hist(res, target_fv):
                   annotation=dict(font_color="#FFFFFF", bgcolor="#182231", yshift=-12))
 
     fig.update_layout(
-        title=f"End Wealth Distribution — P(≥Target) = {p*100:.1f}%",
+        title=f"End Wealth Distribution with Probability of {p*100:.1f}% Reaching the Target",
         bargap=0.05, margin=dict(l=10, r=10, t=40, b=10)
     )
     return fig
@@ -437,14 +437,14 @@ W_det = deterministic_end_wealth(goal, market)
 
 # ---------- Header ----------
 st.title("📈 Goal Projection Calculator")
-st.caption("Monte Carlo projection with start-of-month contributions • Streamlit demo")
+st.caption("Monte Carlo projection with start-of-month contributions")
 
 # ---------- KPI grid (2 rows, readable labels) ----------
-row1 = st.columns(2)
-with row1[0]:
-    st.metric("Probability (Monte Carlo)", f"{res['prob_completion']*100:.1f} %")
-with row1[1]:
-    st.metric("Probability (Analytic — Fenton-Wilkinson)", f"{fw['p']*100:.1f} %")
+row3 = st.columns(2)
+with row3[0]:
+    st.metric("Starting NAV", f"Rp {W0:,.0f}".replace(",", "."))
+with row3[1]:
+    st.metric("Target at Horizon", f"Rp {target:,.0f}".replace(",", "."))
 
 row2 = st.columns(2)
 with row2[0]:
@@ -455,12 +455,11 @@ with row2[0]:
 with row2[1]:
     st.metric("Median (P50) End Wealth", f"Rp {res['percentiles']['p50']:,.0f}".replace(",", "."))
 
-row3 = st.columns(2)
-with row3[0]:
-    st.metric("Starting NAV (W0)", f"Rp {W0:,.0f}".replace(",", "."))
-with row3[1]:
-    st.metric("Target @ Horizon", f"Rp {target:,.0f}".replace(",", "."))
-
+row1 = st.columns(2)
+with row1[0]:
+    st.metric("Probability (Monte Carlo)", f"{res['prob_completion']*100:.1f} %")
+with row1[1]:
+    st.metric("Probability (Fenton-Wilkinson)", f"{fw['p']*100:.1f} %")
 
 # Format "As of" as "MonthName Year" (e.g. "October 2025")
 as_of_raw = res.get("as_of", "")
@@ -480,7 +479,7 @@ st.markdown(
 st.markdown("---")
 
 # --- Projection band (interactive) ---
-st.subheader("Projection band (P10-P50-P90) to horizon")
+st.subheader("Projection band to horizon")
 fig1 = fig_projection_band(res, target)
 if log_y:
     fig1.update_yaxes(type="log")
@@ -491,7 +490,7 @@ P50 is the base case; P10 pessimistic; P90 optimistic.
 """)
 
 # --- Simulated wealth paths (interactive) ---
-st.subheader("Simulated wealth paths (sample)")
+st.subheader("Simulated wealth paths")
 fig2 = fig_simulated_paths(res, target)
 if log_y:
     fig2.update_yaxes(type="log")
@@ -516,28 +515,39 @@ st.markdown("---")
 st.subheader("Outputs & downloads")
 
 # Summary table
+as_of_raw = res.get("as_of", "")
+as_of_fmt = as_of_raw
+try:
+  ts = as_of_raw.replace(" WIB", "")
+  dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+  as_of_fmt = f"{dt.day} {dt.strftime('%B %Y')}"  # e.g. "23 October 2025"
+except Exception:
+  pass
+
 summary = pd.DataFrame({
-    "Metric": [
-        "As-of", "Paths", "Horizon (mo)", "W0", "Sum(contrib)", "Target",
-        "E[G]_month", "m_month", "s_month",
-        "P10 end", "P50 end", "P90 end",
-        "Prob Completion (MC)", "Prob (FW Analytic)", "Deterministic End"
-    ],
-    "Value": [
-        res["as_of"], res["as_of_params"]["paths"], res["as_of_params"]["horizon_months"],
-        f"Rp {res['as_of_params']['W0']:,.0f}".replace(",", "."),
-        f"Rp {res['as_of_params']['contributions_sum']:,.0f}".replace(",", "."),
-        f"Rp {res['as_of_params']['target_FV']:,.0f}".replace(",", "."),
-        f"{(res['as_of_params']['E_G_month'] - 1) * 100:.3f} %",
-        f"{res['as_of_params']['m_month']:.5f}",
-        f"{res['as_of_params']['s_month']:.5f}",
-        f"Rp {res['percentiles']['p10']:,.0f}".replace(",", "."),
-        f"Rp {res['percentiles']['p50']:,.0f}".replace(",", "."),
-        f"Rp {res['percentiles']['p90']:,.0f}".replace(",", "."),
-        f"{res['prob_completion']*100:.1f} %",
-        f"{fw['p']*100:.1f} %",
-        f"Rp {W_det:,.0f}".replace(",", "."),
-    ]
+  "Metric": [
+    "As-of", "Paths", "Horizon (mo)", "W0", "Sum(contrib)", "Target",
+    "E[G]_month", "m_month", "s_month",
+    "P10 end", "P50 end", "P90 end",
+    "Prob Completion (MC)", "Prob (FW Analytic)", "Deterministic End"
+  ],
+  "Value": [
+    as_of_fmt,
+    res["as_of_params"]["paths"],
+    res["as_of_params"]["horizon_months"],
+    f"Rp {res['as_of_params']['W0']:,.0f}".replace(",", "."),
+    f"Rp {res['as_of_params']['contributions_sum']:,.0f}".replace(",", "."),
+    f"Rp {res['as_of_params']['target_FV']:,.0f}".replace(",", "."),
+    f"{(res['as_of_params']['E_G_month'] - 1) * 100:.3f} %",
+    f"{res['as_of_params']['m_month']:.5f}",
+    f"{res['as_of_params']['s_month']:.5f}",
+    f"Rp {res['percentiles']['p10']:,.0f}".replace(",", "."),
+    f"Rp {res['percentiles']['p50']:,.0f}".replace(",", "."),
+    f"Rp {res['percentiles']['p90']:,.0f}".replace(",", "."),
+    f"{res['prob_completion']*100:.1f} %",
+    f"{fw['p']*100:.1f} %",
+    f"Rp {W_det:,.0f}".replace(",", "."),
+  ]
 })
 st.dataframe(summary, use_container_width=True)
 
